@@ -2,6 +2,7 @@
 #include <random>
 #include <bvh/triangle.hpp>
 #include <bvh/sweep_sah_builder.hpp>
+#include <bvh/linear_bvh_builder.hpp>
 #include "third_party/happly/happly.h"
 
 double half_area(const float *bounds) {
@@ -58,26 +59,6 @@ void update_bbox(bvh::Bvh<float> &bvh, int idx) {
     bvh.nodes[idx].bounding_box_proxy().extend(bvh.nodes[right_idx].bounding_box_proxy());
 }
 
-void detect_cycle(const bvh::Bvh<float> &bvh) {
-    bool visited[bvh.node_count];
-    for (int i = 0; i < bvh.node_count; i++)
-        visited[i] = false;
-    std::queue<int> queue;
-    queue.push(0);
-    while (!queue.empty()) {
-        int curr = queue.front();
-        queue.pop();
-        visited[curr] = true;
-        bvh::Bvh<float>::Node &node = bvh.nodes[curr];
-        if (!node.is_leaf()) {
-            assert(!visited[node.first_child_or_primitive]);
-            assert(!visited[node.first_child_or_primitive + 1]);
-            queue.push(node.first_child_or_primitive);
-            queue.push(node.first_child_or_primitive + 1);
-        }
-    }
-}
-
 void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
     // calculate parent index
     int parent[bvh.node_count];
@@ -108,7 +89,7 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
     std::uniform_int_distribution<int> uniform_dist(3, bvh.node_count - 1);
 
     double last = std::numeric_limits<double>::max();
-    for (int iter = 0; iter < 1000; iter++) {
+    for (int iter = 0; iter < 10000; iter++) {
         // select victim
         int victim_idx;
         do {
@@ -236,7 +217,7 @@ int main() {
               << global_bbox.max[0] << ", " << global_bbox.max[1] << ", " << global_bbox.max[2] << ")" << std::endl;
 
     bvh::Bvh<float> bvh;
-    bvh::SweepSahBuilder<bvh::Bvh<float>> builder(bvh);
+    bvh::LinearBvhBuilder<bvh::Bvh<float>, uint32_t> builder(bvh);
     builder.build(global_bbox, bboxes.get(), centers.get(), triangles.size());
 
     std::cout << sah_cost(bvh, 0.3, 1) << std::endl;
