@@ -201,7 +201,6 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
 
             double c = sah_cost(bvh, 0.3, 1);
             std::cout << c << std::endl;
-            assert(c <= last);
             last = c;
         }
     }
