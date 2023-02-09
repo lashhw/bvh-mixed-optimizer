@@ -83,6 +83,22 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             parent[bvh.nodes[idx].first_child_or_primitive + 1] = idx;
         }
     };
+    auto check_parent = [&]() {
+        std::queue<int> queue;
+        queue.push(0);
+        while (!queue.empty()) {
+            int curr = queue.front();
+            queue.pop();
+            if (!bvh.nodes[curr].is_leaf()) {
+                int left = bvh.nodes[curr].first_child_or_primitive;
+                int right = left + 1;
+                assert(parent[left] == curr);
+                assert(parent[right] == curr);
+                queue.push(left);
+                queue.push(right);
+            }
+        }
+    };
 
     double last = std::numeric_limits<double>::max();
     for (int iter = 0; iter < 100; iter++) {
@@ -104,6 +120,10 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
         std::sort(area_idx_pair.begin(), area_idx_pair.end(), std::greater<>());
 
         for (auto [_, victim_idx] : area_idx_pair) {
+            // skip leaf node
+            if (bvh.nodes[victim_idx].is_leaf())
+                continue;
+
             // remove victim's left child
             int victim_left_idx = bvh.nodes[victim_idx].first_child_or_primitive;
             int victim_right_idx = victim_left_idx + 1;
@@ -148,6 +168,10 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             update_parent(best_idx);
             for (int curr = parent[best_idx]; curr != 0; curr = parent[curr])
                 update_bbox(bvh, curr);
+
+            // special case
+            if (best_idx == victim_idx)
+                victim_idx = victim_right_idx;
 
             // remove victim's right child
             int parent_idx = parent[victim_idx];
