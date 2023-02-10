@@ -102,15 +102,14 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
 
     double last = std::numeric_limits<double>::max();
     for (int iter = 0; iter < 100; iter++) {
-        // sort node by surface area (excluding root, root's children, and leaf)
+        // sort node by surface area
         std::vector<std::pair<double, int>> area_idx_pair;
         queue.push(0);
         while (!queue.empty()) {
             int curr = queue.front();
             queue.pop();
             if (!bvh.nodes[curr].is_leaf()) {
-                if (curr > 2)
-                    area_idx_pair.emplace_back(half_area(bvh.nodes[curr].bounds), curr);
+                area_idx_pair.emplace_back(half_area(bvh.nodes[curr].bounds), curr);
                 int left = bvh.nodes[curr].first_child_or_primitive;
                 int right = left + 1;
                 queue.push(left);
@@ -120,8 +119,11 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
         std::sort(area_idx_pair.begin(), area_idx_pair.end(), std::greater<>());
 
         for (auto [_, victim_idx] : area_idx_pair) {
-            // skip leaf node
-            if (bvh.nodes[victim_idx].is_leaf())
+            // skip root, root's children, and leaf node
+            if (victim_idx == 0 ||
+                victim_idx == bvh.nodes[0].first_child_or_primitive ||
+                victim_idx == bvh.nodes[0].first_child_or_primitive + 1 ||
+                bvh.nodes[victim_idx].is_leaf())
                 continue;
 
             // remove victim's left child
