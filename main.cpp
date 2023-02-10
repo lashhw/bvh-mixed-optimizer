@@ -124,12 +124,20 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             if (bvh.nodes[victim_idx].is_leaf())
                 continue;
 
-            // remove victim's left child
+            // remove victim
             int victim_left_idx = bvh.nodes[victim_idx].first_child_or_primitive;
             int victim_right_idx = victim_left_idx + 1;
-            bvh.nodes[victim_idx] = bvh.nodes[victim_right_idx];
-            update_parent(victim_idx);
-            for (int curr = parent[victim_idx]; curr != 0; curr = parent[curr])
+            int parent_idx = parent[victim_idx];
+            int victim_sibling_idx;
+            if (bvh.nodes[parent_idx].first_child_or_primitive == victim_idx)
+                victim_sibling_idx = victim_idx + 1;
+            else if (bvh.nodes[parent_idx].first_child_or_primitive + 1 == victim_idx)
+                victim_sibling_idx = victim_idx - 1;
+            else
+                assert(false);
+            bvh.nodes[parent_idx] = bvh.nodes[victim_sibling_idx];
+            update_parent(parent_idx);
+            for (int curr = parent[parent_idx]; curr != 0; curr = parent[curr])
                 update_bbox(bvh, curr);
 
             // determine where to place left child
@@ -158,39 +166,23 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             }
 
             // place left child
-            bvh.nodes[victim_right_idx] = bvh.nodes[best_idx];
-            update_parent(victim_right_idx);
+            bvh.nodes[victim_sibling_idx] = bvh.nodes[victim_left_idx];
+            update_parent(victim_sibling_idx);
+            bvh.nodes[victim_idx] = bvh.nodes[best_idx];
+            update_parent(victim_idx);
             bvh.nodes[best_idx].bounding_box_proxy() = bvh::BoundingBox<float>::empty();
-            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_left_idx].bounding_box_proxy());
-            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_right_idx].bounding_box_proxy());
+            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_sibling_idx].bounding_box_proxy());
+            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_idx].bounding_box_proxy());
             bvh.nodes[best_idx].primitive_count = 0;
-            bvh.nodes[best_idx].first_child_or_primitive = victim_left_idx;
+            bvh.nodes[best_idx].first_child_or_primitive = std::min(victim_sibling_idx, victim_idx);
             update_parent(best_idx);
             for (int curr = parent[best_idx]; curr != 0; curr = parent[curr])
-                update_bbox(bvh, curr);
-
-            // special case
-            if (best_idx == victim_idx)
-                victim_idx = victim_right_idx;
-
-            // remove victim's right child
-            int parent_idx = parent[victim_idx];
-            int victim_sibling_idx;
-            if (bvh.nodes[parent_idx].first_child_or_primitive == victim_idx)
-                victim_sibling_idx = victim_idx + 1;
-            else if (bvh.nodes[parent_idx].first_child_or_primitive + 1 == victim_idx)
-                victim_sibling_idx = victim_idx - 1;
-            else
-                assert(false);
-            bvh.nodes[parent_idx] = bvh.nodes[victim_sibling_idx];
-            update_parent(parent_idx);
-            for (int curr = parent[parent_idx]; curr != 0; curr = parent[curr])
                 update_bbox(bvh, curr);
 
             // determine where to place right child
             best_idx = -1;
             best_cost = std::numeric_limits<double>::max();
-            bvh::BoundingBox<float> victim_right_bbox = bvh.nodes[victim_idx].bounding_box_proxy();
+            bvh::BoundingBox<float> victim_right_bbox = bvh.nodes[victim_right_idx].bounding_box_proxy();
             stack.emplace(0, 0);
             while (!stack.empty()) {
                 std::pair<int, double> curr = stack.top();
@@ -212,13 +204,13 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             }
 
             // place right child
-            bvh.nodes[victim_sibling_idx] = bvh.nodes[best_idx];
-            update_parent(victim_sibling_idx);
+            bvh.nodes[victim_left_idx] = bvh.nodes[best_idx];
+            update_parent(victim_left_idx);
             bvh.nodes[best_idx].bounding_box_proxy() = bvh::BoundingBox<float>::empty();
-            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_sibling_idx].bounding_box_proxy());
-            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_idx].bounding_box_proxy());
+            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_left_idx].bounding_box_proxy());
+            bvh.nodes[best_idx].bounding_box_proxy().extend(bvh.nodes[victim_right_idx].bounding_box_proxy());
             bvh.nodes[best_idx].primitive_count = 0;
-            bvh.nodes[best_idx].first_child_or_primitive = std::min(victim_idx, victim_sibling_idx);
+            bvh.nodes[best_idx].first_child_or_primitive = victim_left_idx;
             update_parent(best_idx);
             for (int curr = parent[best_idx]; curr != 0; curr = parent[curr])
                 update_bbox(bvh, curr);
