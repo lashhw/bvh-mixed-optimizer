@@ -110,22 +110,6 @@ void optimize(bvh::Bvh<float> &bvh) {
             parent[bvh.nodes[idx].first_child_or_primitive + 1] = idx;
         }
     };
-    auto check_parent = [&]() {
-        std::queue<int> queue;
-        queue.push(0);
-        while (!queue.empty()) {
-            int curr = queue.front();
-            queue.pop();
-            if (!bvh.nodes[curr].is_leaf()) {
-                int left = bvh.nodes[curr].first_child_or_primitive;
-                int right = left + 1;
-                assert(parent[left] == curr);
-                assert(parent[right] == curr);
-                queue.push(left);
-                queue.push(right);
-            }
-        }
-    };
 
     for (int iter = 0; iter < 100; iter++) {
         // sort node by surface area
