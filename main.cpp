@@ -68,15 +68,15 @@ int find_best_idx(const bvh::Bvh<float> &bvh, int insert_idx) {
     while (!stack.empty()) {
         std::pair<int, double> curr = stack.top();
         stack.pop();
+        double before_half_area = half_area(bvh.nodes[curr.first].bounds);
+        bvh::BoundingBox<float> after_bbox = bvh.nodes[curr.first].bounding_box_proxy();
+        after_bbox.extend(insert_bbox);
+        double after_half_area = half_area(after_bbox);
+        if (curr.second + after_half_area < best_cost) {
+            best_idx = curr.first;
+            best_cost = curr.second + after_half_area;
+        }
         if (!bvh.nodes[curr.first].is_leaf()) {
-            double before_half_area = half_area(bvh.nodes[curr.first].bounds);
-            bvh::BoundingBox<float> after_bbox = bvh.nodes[curr.first].bounding_box_proxy();
-            after_bbox.extend(insert_bbox);
-            double after_half_area = half_area(after_bbox);
-            if (curr.second + after_half_area < best_cost) {
-                best_idx = curr.first;
-                best_cost = curr.second + after_half_area;
-            }
             int left_idx = bvh.nodes[curr.first].first_child_or_primitive;
             int right_idx = left_idx + 1;
             stack.emplace(left_idx, curr.second + after_half_area - before_half_area);
