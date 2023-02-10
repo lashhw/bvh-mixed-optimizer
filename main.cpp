@@ -59,6 +59,34 @@ void update_bbox(bvh::Bvh<float> &bvh, int idx) {
     bvh.nodes[idx].bounding_box_proxy().extend(bvh.nodes[right_idx].bounding_box_proxy());
 }
 
+int find_best_idx(const bvh::Bvh<float> &bvh, int insert_idx) {
+    int best_idx = -1;
+    double best_cost = std::numeric_limits<double>::max();
+    bvh::BoundingBox<float> insert_bbox = bvh.nodes[insert_idx].bounding_box_proxy();
+    std::stack<std::pair<int, double>> stack;
+    stack.emplace(bvh.nodes[0].first_child_or_primitive, 0);
+    stack.emplace(bvh.nodes[0].first_child_or_primitive + 1, 0);
+    while (!stack.empty()) {
+        std::pair<int, double> curr = stack.top();
+        stack.pop();
+        if (!bvh.nodes[curr.first].is_leaf()) {
+            double before_half_area = half_area(bvh.nodes[curr.first].bounds);
+            bvh::BoundingBox<float> after_bbox = bvh.nodes[curr.first].bounding_box_proxy();
+            after_bbox.extend(insert_bbox);
+            double after_half_area = half_area(after_bbox);
+            if (curr.second + after_half_area < best_cost) {
+                best_idx = curr.first;
+                best_cost = curr.second + after_half_area;
+            }
+            int left_idx = bvh.nodes[curr.first].first_child_or_primitive;
+            int right_idx = left_idx + 1;
+            stack.emplace(left_idx, curr.second + after_half_area - before_half_area);
+            stack.emplace(right_idx, curr.second + after_half_area - before_half_area);
+        }
+    }
+    return best_idx;
+}
+
 void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
     // calculate parent index
     int parent[bvh.node_count];
@@ -100,7 +128,6 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
         }
     };
 
-    double last = std::numeric_limits<double>::max();
     for (int iter = 0; iter < 100; iter++) {
         // sort node by surface area
         std::vector<std::pair<double, int>> area_idx_pair;
@@ -134,32 +161,8 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             for (int curr = parent[victim_idx]; curr != 0; curr = parent[curr])
                 update_bbox(bvh, curr);
 
-            // determine where to place left child
-            int best_idx = -1;
-            double best_cost = std::numeric_limits<double>::max();
-            bvh::BoundingBox<float> victim_left_bbox = bvh.nodes[victim_left_idx].bounding_box_proxy();
-            std::stack<std::pair<int, double>> stack;
-            stack.emplace(0, 0);
-            while (!stack.empty()) {
-                std::pair<int, double> curr = stack.top();
-                stack.pop();
-                int left_idx = bvh.nodes[curr.first].first_child_or_primitive;
-                for (int i = 0; i <= 1; i++) {  // 0 for left child, 1 for right child
-                    if (!bvh.nodes[left_idx + i].is_leaf()) {
-                        double before_half_area = half_area(bvh.nodes[left_idx + i].bounds);
-                        bvh::BoundingBox<float> after_bbox = bvh.nodes[left_idx + i].bounding_box_proxy();
-                        after_bbox.extend(victim_left_bbox);
-                        double after_half_area = half_area(after_bbox);
-                        if (curr.second + after_half_area < best_cost) {
-                            best_idx = left_idx + i;
-                            best_cost = curr.second + after_half_area;
-                        }
-                        stack.emplace(left_idx + i, curr.second + after_half_area - before_half_area);
-                    }
-                }
-            }
-
             // place left child
+            int best_idx = find_best_idx(bvh, victim_left_idx);
             bvh.nodes[victim_right_idx] = bvh.nodes[best_idx];
             update_parent(victim_right_idx);
             bvh.nodes[best_idx].bounding_box_proxy() = bvh::BoundingBox<float>::empty();
@@ -190,30 +193,7 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
                 update_bbox(bvh, curr);
 
             // determine where to place right child
-            best_idx = -1;
-            best_cost = std::numeric_limits<double>::max();
-            bvh::BoundingBox<float> victim_right_bbox = bvh.nodes[victim_idx].bounding_box_proxy();
-            stack.emplace(0, 0);
-            while (!stack.empty()) {
-                std::pair<int, double> curr = stack.top();
-                stack.pop();
-                int left_idx = bvh.nodes[curr.first].first_child_or_primitive;
-                for (int i = 0; i <= 1; i++) {  // 0 for left child, 1 for right child
-                    if (!bvh.nodes[left_idx + i].is_leaf()) {
-                        double before_half_area = half_area(bvh.nodes[left_idx + i].bounds);
-                        bvh::BoundingBox<float> after_bbox = bvh.nodes[left_idx + i].bounding_box_proxy();
-                        after_bbox.extend(victim_right_bbox);
-                        double after_half_area = half_area(after_bbox);
-                        if (curr.second + after_half_area < best_cost) {
-                            best_idx = left_idx + i;
-                            best_cost = curr.second + after_half_area;
-                        }
-                        stack.emplace(left_idx + i, curr.second + after_half_area - before_half_area);
-                    }
-                }
-            }
-
-            // place right child
+            best_idx = find_best_idx(bvh, victim_idx);
             bvh.nodes[victim_sibling_idx] = bvh.nodes[best_idx];
             update_parent(victim_sibling_idx);
             bvh.nodes[best_idx].bounding_box_proxy() = bvh::BoundingBox<float>::empty();
@@ -225,9 +205,7 @@ void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
             for (int curr = parent[best_idx]; curr != 0; curr = parent[curr])
                 update_bbox(bvh, curr);
 
-            double c = sah_cost(bvh, 0.3, 1);
-            std::cout << c << std::endl;
-            last = c;
+            std::cout << sah_cost(bvh, 0.3, 1) << std::endl;
         }
     }
 }
