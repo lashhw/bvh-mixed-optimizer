@@ -1,5 +1,4 @@
 #include <iostream>
-#include <random>
 #include <bvh/triangle.hpp>
 #include <bvh/sweep_sah_builder.hpp>
 #include <bvh/linear_bvh_builder.hpp>
@@ -87,7 +86,7 @@ int find_best_idx(const bvh::Bvh<float> &bvh, int insert_idx) {
     return best_idx;
 }
 
-void optimize(bvh::Bvh<float> &bvh, int seed = 0) {
+void optimize(bvh::Bvh<float> &bvh) {
     // calculate parent index
     int parent[bvh.node_count];
     parent[0] = 0;
