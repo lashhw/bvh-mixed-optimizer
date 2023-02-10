@@ -134,8 +134,8 @@ void optimize(bvh::Bvh<float> &bvh) {
         while (!queue.empty()) {
             int curr = queue.front();
             queue.pop();
+            area_idx_pair.emplace_back(half_area(bvh.nodes[curr].bounds), curr);
             if (!bvh.nodes[curr].is_leaf()) {
-                area_idx_pair.emplace_back(half_area(bvh.nodes[curr].bounds), curr);
                 int left = bvh.nodes[curr].first_child_or_primitive;
                 int right = left + 1;
                 queue.push(left);
