@@ -3,18 +3,8 @@
 #include <bvh/sweep_sah_builder.hpp>
 #include <bvh/linear_bvh_builder.hpp>
 #include "third_party/happly/happly.h"
-
-double half_area(const float *bounds) {
-    double d_x = double(bounds[1]) - double(bounds[0]);
-    double d_y = double(bounds[3]) - double(bounds[2]);
-    double d_z = double(bounds[5]) - double(bounds[4]);
-    return (d_x + d_y) * d_z + d_x * d_y;
-}
-
-double half_area(const bvh::BoundingBox<float> &bbox) {
-    float bounds[6] = { bbox.min[0], bbox.max[0], bbox.min[1], bbox.max[1], bbox.min[2], bbox.max[2] };
-    return half_area(bounds);
-}
+#include "utility.hpp"
+#include "low_precision_optimizer.hpp"
 
 double sah_cost_recursive(const bvh::Bvh<float> &bvh, const bvh::Bvh<float>::Node &node, double c_t, double c_i) {
     if (node.is_leaf())
@@ -48,14 +38,6 @@ double sah_cost(const bvh::Bvh<float> &bvh, double c_t, double c_i) {
     }
 
     return cost;
-}
-
-void update_bbox(bvh::Bvh<float> &bvh, int idx) {
-    int left_idx = bvh.nodes[idx].first_child_or_primitive;
-    int right_idx = left_idx + 1;
-    bvh.nodes[idx].bounding_box_proxy() = bvh::BoundingBox<float>::empty();
-    bvh.nodes[idx].bounding_box_proxy().extend(bvh.nodes[left_idx].bounding_box_proxy());
-    bvh.nodes[idx].bounding_box_proxy().extend(bvh.nodes[right_idx].bounding_box_proxy());
 }
 
 int find_target_idx(const bvh::Bvh<float> &bvh, int insert_idx) {
@@ -214,5 +196,11 @@ int main() {
 
     std::cout << sah_cost(bvh, 0.3, 1) << std::endl;
     std::cout << sah_cost_recursive(bvh, bvh.nodes[0], 0.3, 1) << std::endl;
-    optimize(bvh);
+
+    LowPrecisionOptimizer optimizer(bvh, 0.3, 0.4, 1, 7, 8);
+    std::cout << optimizer.sah_cost() << std::endl;
+    std::cout << optimizer.sah_cost_recursive(0, bvh.nodes[0].bounding_box_proxy()) << std::endl;
+    // optimizer.optimize();
+
+    // optimize(bvh);
 }
