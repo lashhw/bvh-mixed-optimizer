@@ -4,6 +4,7 @@
 #include <bvh/linear_bvh_builder.hpp>
 #include "third_party/happly/happly.h"
 #include "reinsertion_optimizer.hpp"
+#include "low_precision_marker.hpp"
 #include "low_precision_optimizer.hpp"
 
 int main() {
@@ -29,6 +30,9 @@ int main() {
     std::cout << reinsert_optimizer.sah_cost() << std::endl;
     std::cout << reinsert_optimizer.sah_cost_recursive(bvh.nodes[0]) << std::endl;
     reinsert_optimizer.optimize();
+
+    LowPrecisionMarker lp_marker(bvh, 0.15, 0.2, 1, 7, 8);
+    lp_marker.mark();
 
     LowPrecisionOptimizer lp_optimizer(bvh, 0.15, 0.2, 1, 7, 8);
     std::cout << lp_optimizer.sah_cost() << std::endl;
