@@ -148,13 +148,16 @@ struct LowPrecisionOptimizer {
     }
 
     std::pair<int, bool> find_target_idx(int insert_idx) {
-        double best_cost = std::numeric_limits<double>::max();
-        int best_idx = -1;
+        double best_cost = std::numeric_limits<double>::infinity();
+        int best_idx;
         bool best_is_lp;
 
+        bvh::Bvh<float>::Node &insert_node = bvh.nodes[insert_idx];
+        bvh::BoundingBox<float> insert_bbox = insert_node.bounding_box_proxy();
+
         std::stack<std::tuple<int, double, double>> stack;
-        stack.emplace(bvh.nodes[0].first_child_or_primitive, 0, 0);
-        stack.emplace(bvh.nodes[0].first_child_or_primitive + 1, 0, 0);
+        stack.emplace(bvh.nodes[0].first_child_or_primitive, std::numeric_limits<float>::infinity(), 0);
+        stack.emplace(bvh.nodes[0].first_child_or_primitive + 1, std::numeric_limits<float>::infinity(), 0);
         while (!stack.empty()) {
             auto [curr_idx, c_lp, c_hp] = stack.top();
             stack.pop();
@@ -162,10 +165,10 @@ struct LowPrecisionOptimizer {
             bvh::Bvh<float>::Node &curr_node = bvh.nodes[curr_idx];
             bvh::Bvh<float>::Node &sibling_node = bvh.nodes[get_sibling_idx(curr_idx)];
             bvh::Bvh<float>::Node &parent_node = bvh.nodes[parent[curr_idx]];
-            bvh::Bvh<float>::Node &insert_node = bvh.nodes[insert_idx];
 
-            double parent_lp_half_area = half_area(to_lp_bbox(parent_node.bounding_box_proxy()));
-            double parent_hp_half_area = half_area(parent_node.bounding_box_proxy());
+            bvh::BoundingBox<float> parent_bbox = parent_node.bounding_box_proxy();
+            double parent_lp_half_area = half_area(to_lp_bbox(parent_bbox));
+            double parent_hp_half_area = half_area(parent_bbox);
             double c_parent_old = 0;
             if (parent_node.low_precision) {
                 c_parent_old += (curr_node.low_precision ? c_t_l : c_t_h) * parent_lp_half_area;
@@ -174,6 +177,10 @@ struct LowPrecisionOptimizer {
                 c_parent_old += (curr_node.low_precision ? c_t_l : c_t_h) * parent_hp_half_area;
                 c_parent_old += (sibling_node.low_precision ? c_t_l : c_t_h) * parent_hp_half_area;
             }
+
+            parent_bbox.extend(insert_bbox);
+            parent_lp_half_area = half_area(to_lp_bbox(parent_bbox));
+            parent_hp_half_area = half_area(parent_bbox);
             double c_lp_parent_is_lp = c_lp + c_t_l * parent_lp_half_area - c_parent_old;
             c_lp_parent_is_lp += (sibling_node.low_precision ? c_t_l : c_t_h) * parent_lp_half_area;
             double c_lp_parent_is_hp = c_hp + c_t_l * parent_hp_half_area - c_parent_old;
@@ -243,7 +250,7 @@ struct LowPrecisionOptimizer {
         for (int curr_idx = modified_idx; curr_idx != 0; curr_idx = parent[curr_idx])
             stack_1.push(curr_idx);
 
-        double c_lp = 0;
+        double c_lp = std::numeric_limits<double>::infinity();
         double c_hp = 0;
         std::stack<std::tuple<int, bool, bool>> stack_2;
         while (!stack_1.empty()) {
@@ -324,6 +331,8 @@ struct LowPrecisionOptimizer {
                 int victim_right_idx = victim_left_idx + 1;
                 bvh.nodes[victim_idx] = bvh.nodes[victim_right_idx];
                 update_parent(victim_idx);
+                for (int curr = parent[victim_idx]; curr != 0; curr = parent[curr])
+                    update_bbox(bvh, curr);
                 propagate_bbox(victim_idx);
 
                 // place left child
@@ -337,6 +346,8 @@ struct LowPrecisionOptimizer {
                 bvh.nodes[target_idx].first_child_or_primitive = victim_left_idx;
                 bvh.nodes[target_idx].low_precision = is_lp;
                 update_parent(target_idx);
+                for (int curr = parent[target_idx]; curr != 0; curr = parent[curr])
+                    update_bbox(bvh, curr);
                 propagate_bbox(target_idx);
 
                 // special case
@@ -354,6 +365,8 @@ struct LowPrecisionOptimizer {
                     assert(false);
                 bvh.nodes[victim_parent_idx] = bvh.nodes[victim_sibling_idx];
                 update_parent(victim_parent_idx);
+                for (int curr = parent[victim_parent_idx]; curr != 0; curr = parent[curr])
+                    update_bbox(bvh, curr);
                 propagate_bbox(victim_parent_idx);
 
                 // determine where to place right child
@@ -367,6 +380,8 @@ struct LowPrecisionOptimizer {
                 bvh.nodes[target_idx].first_child_or_primitive = std::min(victim_idx, victim_sibling_idx);
                 bvh.nodes[target_idx].low_precision = is_lp;
                 update_parent(target_idx);
+                for (int curr = parent[target_idx]; curr != 0; curr = parent[curr])
+                    update_bbox(bvh, curr);
                 propagate_bbox(target_idx);
 
                 std::cout << sah_cost() << std::endl;
